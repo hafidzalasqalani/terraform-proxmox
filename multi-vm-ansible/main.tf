@@ -64,8 +64,25 @@ resource "proxmox_vm_qemu" "vm" {
 
 resource "null_resource" "ansible" {
   provisioner "local-exec" {
-    
+    command = <<-EOT
+      cat <<EOL > inventory.ini
+      [vms]
+      ${join("\n", formatlist("%s ansible_host=%s", proxmox_vm_qemu.vm.*.name, proxmox_vm_qemu.vm.*.default_ipv4_address))}
+      EOL
+    EOT
   }
+
+  depends_on = [ proxmox_vm_qemu.vm ]
+}
+
+resource "null_resource" "ansible_config" {
+  provisioner "local-exec" {
+    command = "sleep 180; ANSIBLE_HOST_KEY_CHECKING=False ansible-playbook -i inventory.ini example-playbook.yml -u ${var.ci_user} --private-key ${var.ci_ssh_pri_key}"
+  }
+  
+  depends_on = [ 
+    null_resource.ansible
+   ]
 }
 
 output "info" {
